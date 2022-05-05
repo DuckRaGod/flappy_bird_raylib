@@ -97,10 +97,33 @@ void PlayerUpdate(float delta){
     player.y = Clamp(player.y, playerSize, height - playerSize); 
 }
 
+void CheckCollision(){
+    int a;                          // Left of obstacle
+    int b;                          // Center height of obstacle
+    for (int i = 0; i < 10; i++){
+        if(obstacles[i].isActive){
+            a = obstacles[i].x;
+            b = obstacles[i].y;
+            if((player.x + playerSize > a  && player.x + playerSize < a + obstcleWidth) || (player.x - playerSize > a && player.x - playerSize < a + obstcleWidth)){
+                // Up obstcle check
+                if((player.y + playerSize > 0 && player.y + playerSize < b - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < b - (gapSize/2))){
+                    std::cout << "Hit up";
+                }
+                // Down obstcle check
+                if((player.y + playerSize > b + (gapSize/2) && player.y + playerSize < height) || (player.y - playerSize > b + (gapSize/2) && player.y - playerSize < height)){
+                    std::cout << "Hit down";
+                }
+            }
+        }
+    }
+}
+
 float spawnTime;
 void Game::Update(){
     float delta = GetFrameTime();
     PlayerUpdate(delta);
+
+    CheckCollision();
 
     for (int i = 0; i < 10; i++){
         if(obstacles[i].isActive){
