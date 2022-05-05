@@ -33,12 +33,28 @@ int scoreText_y = 0;
 float spawnTime = 0;
 int screenWidth = 0;
 int screenHeight = 0;
+bool isPlay = false;
+
+Music music;
+Sound getScoreSound;
+Sound hitSound;
+Sound upSound;
 
 void SetGame(int _width, int _height, std::string title){
     screenWidth = _width;
     screenHeight = _height;
     SetTargetFPS(70); 
     InitWindow(screenWidth, screenHeight, title.c_str());
+    InitAudioDevice();
+}
+
+void SetAudio(){
+    music = LoadMusicStream("../resources/music.wav");
+    SetMusicVolume(music, 0.1f);
+    PlayMusicStream(music);
+    getScoreSound = LoadSound("../resources/score.wav");
+    hitSound = LoadSound("../resources/hit.mp3");
+    upSound = LoadSound("../resources/up.wav");
 }
 
 void SetPlayer(int x){
@@ -67,13 +83,18 @@ void SetObstacles(){
 Game::Game(int _width, int _height, std::string title){
     assert(!GetWindowHandle());
     SetGame(_width, _height, title);
+    SetAudio();
     SetPlayer(screenWidth/2 - 250);
     SetText();
     SetObstacles();
+    isPlay = true; // Todo change
 }
 
 Game::~Game() noexcept{
     assert(GetWindowHandle());
+    UnloadMusicStream(music);
+    CloseAudioDevice(); 
+    StopSoundMulti(); 
     CloseWindow();
 }
 
@@ -111,7 +132,10 @@ int Clamp(int num, int min, int max){
 
 void PlayerUpdate(float delta){
     player.velocity += 300 * delta;                                            
-    if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) player.velocity -= 200;
+    if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+        player.velocity -= 200; 
+        PlaySoundMulti(upSound);
+    }
     player.velocity = Clamp(player.velocity, -100, 100); 
     if(player.velocity == 0) player.velocity = 100;
     player.y += delta * player.velocity;                                       
@@ -137,6 +161,7 @@ void ObstaclesUpdate(float delta){
         if(!obstacles[i].isScorable) continue;
         if(player.x + (playerSize/2) < obstacles[i].object.x + (obstcleWidth/2)) continue;
         score++;
+        PlaySoundMulti(getScoreSound);
         obstacles[i].isScorable = false;
     }
     spawnTime += delta;
@@ -154,15 +179,19 @@ void CheckCollision(){
         y = obstacles[i].object.y;
         if(!(player.x + playerSize > x  && player.x + playerSize < x + obstcleWidth) || !(player.x - playerSize > x && player.x - playerSize < x + obstcleWidth)) continue;
         if((player.y + playerSize > 0 && player.y + playerSize < y - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < y - (gapSize/2))){
-            std::cout << "Hit";
+            PlaySoundMulti(hitSound);
+            isPlay = false;
         }
         if((player.y + playerSize > y + (gapSize/2) && player.y + playerSize < screenHeight) || (player.y - playerSize > y + (gapSize/2) && player.y - playerSize < screenHeight)){
-            std::cout << "Hit";
+            PlaySoundMulti(hitSound);
+            isPlay = false;
         }
     }
 }
 
 void Game::Update(){
+    if(!isPlay) return;
+    UpdateMusicStream(music);
     float delta = GetFrameTime();
     PlayerUpdate(delta);
     ObstaclesUpdate(delta);
