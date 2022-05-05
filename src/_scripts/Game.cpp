@@ -33,12 +33,14 @@ int scoreText_y = 0;
 float spawnTime = 0;
 int screenWidth = 0;
 int screenHeight = 0;
-bool isPlay = false;
 
 Music music;
 Sound getScoreSound;
 Sound hitSound;
 Sound upSound;
+
+enum Menus{MAIN = 0, GAMEMENU, ENDING};
+Menus currentMenu;
 
 void SetGame(int _width, int _height, std::string title){
     screenWidth = _width;
@@ -46,6 +48,7 @@ void SetGame(int _width, int _height, std::string title){
     SetTargetFPS(70); 
     InitWindow(screenWidth, screenHeight, title.c_str());
     InitAudioDevice();
+    currentMenu = MAIN;
 }
 
 void SetAudio(){
@@ -87,7 +90,6 @@ Game::Game(int _width, int _height, std::string title){
     SetPlayer(screenWidth/2 - 250);
     SetText();
     SetObstacles();
-    isPlay = true; // Todo change
 }
 
 Game::~Game() noexcept{
@@ -119,9 +121,23 @@ void DrawObstacles(){
 
 void Game::Draw(){
     ClearBackground(RAYWHITE);
-    DrawObstacles();
-    DrawCircle(player.x, player.y, playerSize, MAROON);
-    DrawText(TextFormat("Score: %i", score), scoreText_x, scoreText_y, fontSize, GREEN);
+
+    switch (currentMenu){
+        case MAIN:{
+            DrawText("Press any key!!!", screenWidth/2 - MeasureText("Press any key!!!" , 100)/2, screenHeight/2, 100, GREEN);
+            break;
+        }
+        case GAMEMENU:{
+            DrawObstacles();
+            DrawCircle(player.x, player.y, playerSize, MAROON);
+            DrawText(TextFormat("Score: %i", score), scoreText_x, scoreText_y, fontSize, GREEN);
+            break;
+        }
+        case ENDING:{
+            DrawText(TextFormat("Your score: %i", score), screenWidth/2 - MeasureText(TextFormat("Your score: %i", score) , 100)/2, screenHeight/2, 100, GREEN);    
+            break;
+        }
+    }
 }
 
 int Clamp(int num, int min, int max){
@@ -180,20 +196,39 @@ void CheckCollision(){
         if(!(player.x + playerSize > x  && player.x + playerSize < x + obstcleWidth) || !(player.x - playerSize > x && player.x - playerSize < x + obstcleWidth)) continue;
         if((player.y + playerSize > 0 && player.y + playerSize < y - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < y - (gapSize/2))){
             PlaySoundMulti(hitSound);
-            isPlay = false;
+            currentMenu = ENDING;
         }
         if((player.y + playerSize > y + (gapSize/2) && player.y + playerSize < screenHeight) || (player.y - playerSize > y + (gapSize/2) && player.y - playerSize < screenHeight)){
             PlaySoundMulti(hitSound);
-            isPlay = false;
+            currentMenu = ENDING;
         }
     }
 }
 
 void Game::Update(){
-    if(!isPlay) return;
-    UpdateMusicStream(music);
-    float delta = GetFrameTime();
-    PlayerUpdate(delta);
-    ObstaclesUpdate(delta);
-    CheckCollision();
+    switch (currentMenu){
+        case MAIN:{
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) currentMenu = GAMEMENU;
+            break;
+        }
+        case GAMEMENU:{
+            UpdateMusicStream(music);
+            float delta = GetFrameTime();
+            PlayerUpdate(delta);
+            ObstaclesUpdate(delta);
+            CheckCollision();
+            break;
+        }
+        case ENDING:{
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+                score = 0;
+                spawnTime = 0;
+                SetPlayer(screenWidth/2 - 250);
+                SetObstacles();
+                currentMenu = GAMEMENU;
+            }
+            break;
+        }
+        default:break;
+    }
 }
