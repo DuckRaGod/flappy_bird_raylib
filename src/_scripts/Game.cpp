@@ -1,7 +1,9 @@
 #include "../include/Game.h"
 #include <raylib.h>
 #include <assert.h>
-#include <iostream>
+
+#define RAYGUI_IMPLEMENTATION
+#include "../include/raygui.h"
 
 struct Entity{
     float x;
@@ -24,10 +26,11 @@ int gapSize = 250;
 int obstcleWidth = 150;
 int obstacleSpeed = 100;
 int playerSize = 25;
-int score = 0;
 const int fontSize = 45;
 
 // cant change
+int score = 0;
+int highestScore = 0;
 int scoreText_x = 0;
 int scoreText_y = 0;
 float spawnTime = 0;
@@ -39,7 +42,12 @@ Sound getScoreSound;
 Sound hitSound;
 Sound upSound;
 
-enum Menus{MAIN = 0, GAMEMENU, ENDING};
+float musicVolume;
+float sfxVolume;
+
+Vector2 mousePoint = { 0.0f, 0.0f };
+
+enum Menus{MAIN = 0, GAMEMENU, ENDING, SETTINGS};
 Menus currentMenu;
 
 void SetGame(int _width, int _height, std::string title){
@@ -53,7 +61,7 @@ void SetGame(int _width, int _height, std::string title){
 
 void SetAudio(){
     music = LoadMusicStream("../resources/music.wav");
-    SetMusicVolume(music, 0.1f);
+    SetMusicVolume(music, musicVolume);
     PlayMusicStream(music);
     getScoreSound = LoadSound("../resources/score.wav");
     hitSound = LoadSound("../resources/hit.mp3");
@@ -121,10 +129,14 @@ void DrawObstacles(){
 
 void Game::Draw(){
     ClearBackground(RAYWHITE);
-
     switch (currentMenu){
         case MAIN:{
-            DrawText("Press any key!!!", screenWidth/2 - MeasureText("Press any key!!!" , 100)/2, screenHeight/2, 100, GREEN);
+            if(GuiButton({(float)screenWidth/2 - 500/2, (float)screenHeight/2, 500, 125}, "Play")){
+                currentMenu = GAMEMENU;
+            }
+            else if(GuiButton({(float)screenWidth/2 - 500/2, (float)screenHeight/2+150, 500, 125}, "Settings")){
+                currentMenu = SETTINGS;
+            }
             break;
         }
         case GAMEMENU:{
@@ -134,7 +146,82 @@ void Game::Draw(){
             break;
         }
         case ENDING:{
-            DrawText(TextFormat("Your score: %i", score), screenWidth/2 - MeasureText(TextFormat("Your score: %i", score) , 100)/2, screenHeight/2, 100, GREEN);    
+            DrawText(TextFormat("Your score: %i", score),
+            screenWidth/2 - MeasureText(TextFormat("Your score: %i", score) , 100)/2,
+            0,
+            100,
+            GREEN);   
+
+            DrawText(TextFormat("Higest score: %i", highestScore),
+            screenWidth/2 - MeasureText(TextFormat("Higest score: %i", highestScore) , 100)/2,
+            125,
+            100,
+            GREEN);    
+
+            if(GuiButton({
+                (float)screenWidth/2 - 500/2,
+                (float)screenHeight-150,
+                500,
+                125
+            }, "Back to main menu")){
+                currentMenu = MAIN;
+                score = 0;
+                spawnTime = 0;
+                SetPlayer(screenWidth/2 - 250);
+                SetObstacles();
+            }
+            else if(GuiButton({
+                (float)screenWidth/2 - 500/2,
+                (float)screenHeight-375,
+                500,
+                125
+            }, "Retry")){
+                score = 0;
+                spawnTime = 0;
+                SetPlayer(screenWidth/2 - 250);
+                SetObstacles();
+                currentMenu = GAMEMENU;
+            }
+            break;
+        }
+        case SETTINGS:{
+            DrawText("Music volume",
+            screenWidth/2 - MeasureText("Music volume" , 35)/2,
+            0,
+            35,
+            BLACK);
+
+            musicVolume = GuiSliderBar({
+                (float)screenWidth/2 - 500/2,
+                75,
+                500,
+                125
+            }, "0" , "5", musicVolume, 0, 5.0f);
+
+            DrawText("Sfx volume", screenWidth/2 - MeasureText("Sfx volume" , 35)/2,
+            300,
+            35,
+            BLACK);
+
+            sfxVolume = GuiSliderBar({
+                (float)screenWidth/2 - 500/2,
+                375,
+                500,
+                125
+            }, "0" , "5", sfxVolume, 0, 5.0f);
+
+            if(GuiButton({
+                (float)screenWidth/2 - 500/2,
+                (float)screenHeight-125,
+                500,
+                125
+            }, "Back")){
+                currentMenu = MAIN;
+            }
+
+            SetMusicVolume(music, musicVolume);
+            SetSoundVolume(hitSound, sfxVolume);
+            SetSoundVolume(upSound, sfxVolume);
             break;
         }
     }
@@ -186,6 +273,12 @@ void ObstaclesUpdate(float delta){
     SpawnObstacle();
 }
 
+void Hit(){
+    PlaySoundMulti(hitSound);
+    currentMenu = ENDING;
+    if(score > highestScore) highestScore = score;
+}
+
 void CheckCollision(){
     int x;
     int y;
@@ -195,22 +288,16 @@ void CheckCollision(){
         y = obstacles[i].object.y;
         if(!(player.x + playerSize > x  && player.x + playerSize < x + obstcleWidth) || !(player.x - playerSize > x && player.x - playerSize < x + obstcleWidth)) continue;
         if((player.y + playerSize > 0 && player.y + playerSize < y - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < y - (gapSize/2))){
-            PlaySoundMulti(hitSound);
-            currentMenu = ENDING;
+            Hit();
         }
         if((player.y + playerSize > y + (gapSize/2) && player.y + playerSize < screenHeight) || (player.y - playerSize > y + (gapSize/2) && player.y - playerSize < screenHeight)){
-            PlaySoundMulti(hitSound);
-            currentMenu = ENDING;
+            Hit();
         }
     }
 }
 
 void Game::Update(){
     switch (currentMenu){
-        case MAIN:{
-            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) currentMenu = GAMEMENU;
-            break;
-        }
         case GAMEMENU:{
             UpdateMusicStream(music);
             float delta = GetFrameTime();
@@ -219,16 +306,8 @@ void Game::Update(){
             CheckCollision();
             break;
         }
-        case ENDING:{
-            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
-                score = 0;
-                spawnTime = 0;
-                SetPlayer(screenWidth/2 - 250);
-                SetObstacles();
-                currentMenu = GAMEMENU;
-            }
-            break;
-        }
+        case ENDING:break;
+        case SETTINGS:break;
         default:break;
     }
 }
