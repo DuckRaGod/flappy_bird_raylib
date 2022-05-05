@@ -7,50 +7,69 @@ struct Entity{
     float x;
     int y;
     int velocity;
+};
+
+struct Obstacle{
+    Entity object;
     bool isActive;
     bool isScorable;
 };
 
 Entity player;
-Entity obstacles[10];
+Obstacle obstacles[10];
 
+// Can change
 int delayObstcle = 5;
 int gapSize = 250;
 int obstcleWidth = 150;
 int obstacleSpeed = 100;
-
-int playerSize = 25; 
-
-int width;
-int height;
-// Text
-int score;
-int scoreText_x;
-int scoreText_y;
+int playerSize = 25;
+int score = 0;
 const int fontSize = 45;
+
+// cant change
+int scoreText_x = 0;
+int scoreText_y = 0;
+float spawnTime = 0;
+int screenWidth = 0;
+int screenHeight = 0;
+
+void SetGame(int _width, int _height, std::string title){
+    screenWidth = _width;
+    screenHeight = _height;
+    SetTargetFPS(70); 
+    InitWindow(screenWidth, screenHeight, title.c_str());
+}
+
+void SetPlayer(int x){
+    player.x = x;
+    player.y = screenHeight/2;
+    player.velocity = 250;
+}
+
+void SetText(){
+    int x = MeasureText(TextFormat("Score: %i", score) , fontSize);
+    scoreText_x = screenWidth/2 - x/2;
+    scoreText_y = 0;
+}
+
+void SetObstacles(){
+    for (int i = 0; i < 10; i++){
+        obstacles[i].object.x = screenWidth;
+        obstacles[i].object.y = GetRandomValue(0, screenHeight);
+        obstacles[i].isActive = false;
+        obstacles[i].isScorable = true;
+        obstacles[i].object.velocity = -obstacleSpeed;
+    }
+    obstacles[0].isActive = true;
+}
 
 Game::Game(int _width, int _height, std::string title){
     assert(!GetWindowHandle());
-    // Game
-    width = _width;
-    height = _height;
-    SetTargetFPS(70); 
-    InitWindow(width, height, title.c_str());
-    // Player
-    player.x = width/2;
-    player.y = height/2;
-    player.velocity = 250;
-    // Text
-    int x = MeasureText(TextFormat("Score: %i", score) , fontSize);
-    scoreText_x = width/2 - x/2;
-    scoreText_y = 0;
-    // Obstcle
-    for (int i = 0; i < 10; i++){
-        obstacles[i].x = width;
-        obstacles[i].y = GetRandomValue(0, height);
-        obstacles[i].isActive = false;
-        obstacles[i].isScorable = true;
-    }
+    SetGame(_width, _height, title);
+    SetPlayer(screenWidth/2 - 250);
+    SetText();
+    SetObstacles();
 }
 
 Game::~Game() noexcept{
@@ -69,16 +88,18 @@ void Game::Tick(){
     EndDrawing();
 }
 
+void DrawObstacles(){
+    for (int i = 0; i < 10; i++){
+        if(!obstacles[i].isActive) continue;
+        DrawRectangle(obstacles[i].object.x, 0, obstcleWidth, obstacles[i].object.y - (gapSize/2), YELLOW); // First obstcle draw
+        DrawRectangle(obstacles[i].object.x, obstacles[i].object.y + (gapSize/2), obstcleWidth, screenHeight - (obstacles[i].object.y + (gapSize/2)) , YELLOW); // First obstcle draw
+    }
+}
+
 void Game::Draw(){
     ClearBackground(RAYWHITE);
-    for (int i = 0; i < 10; i++){
-        if(obstacles[i].isActive == true){
-            DrawRectangle(obstacles[i].x, 0, obstcleWidth, obstacles[i].y - (gapSize/2), YELLOW); // First obstcle draw
-            DrawRectangle(obstacles[i].x, obstacles[i].y + (gapSize/2), obstcleWidth, height - (obstacles[i].y + (gapSize/2)) , YELLOW); // First obstcle draw
-        }
-    }
+    DrawObstacles();
     DrawCircle(player.x, player.y, playerSize, MAROON);
-
     DrawText(TextFormat("Score: %i", score), scoreText_x, scoreText_y, fontSize, GREEN);
 }
 
@@ -89,67 +110,61 @@ int Clamp(int num, int min, int max){
 }
 
 void PlayerUpdate(float delta){
-    player.velocity += 300 * delta;                                             // Gravity
+    player.velocity += 300 * delta;                                            
     if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) player.velocity -= 200;
     player.velocity = Clamp(player.velocity, -100, 100); 
     if(player.velocity == 0) player.velocity = 100;
-    player.y += delta * player.velocity;                                        // Apply velocity
-    player.y = Clamp(player.y, playerSize, height - playerSize); 
+    player.y += delta * player.velocity;                                       
+    player.y = Clamp(player.y, playerSize, screenHeight - playerSize); 
+}
+
+void SpawnObstacle(){
+    for (int i = 0; i < 10; i++){
+        if(obstacles[i].isActive) continue;
+        obstacles[i].object.x = screenWidth;
+        obstacles[i].isActive = true;
+        obstacles[i].isScorable = true;
+        obstacles[i].object.velocity = -obstacleSpeed;
+        return;
+    }
+}
+
+void ObstaclesUpdate(float delta){
+    for (int i = 0; i < 10; i++){
+        if(!obstacles[i].isActive) continue;
+        obstacles[i].object.x += obstacles[i].object.velocity * delta;
+        if ((obstacles[i].object.x + obstcleWidth) <= 0) obstacles[i].isActive = false;
+        if(!obstacles[i].isScorable) continue;
+        if(player.x + (playerSize/2) < obstacles[i].object.x + (obstcleWidth/2)) continue;
+        score++;
+        obstacles[i].isScorable = false;
+    }
+    spawnTime += delta;
+    if(spawnTime < delayObstcle) return;
+    spawnTime = 0;
+    SpawnObstacle();
 }
 
 void CheckCollision(){
-    int a;                          // Left of obstacle
-    int b;                          // Center height of obstacle
+    int x;
+    int y;
     for (int i = 0; i < 10; i++){
-        if(obstacles[i].isActive){
-            a = obstacles[i].x;
-            b = obstacles[i].y;
-            if((player.x + playerSize > a  && player.x + playerSize < a + obstcleWidth) || (player.x - playerSize > a && player.x - playerSize < a + obstcleWidth)){
-                // Up obstcle check
-                if((player.y + playerSize > 0 && player.y + playerSize < b - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < b - (gapSize/2))){
-                    std::cout << "Hit up";
-                }
-                // Down obstcle check
-                if((player.y + playerSize > b + (gapSize/2) && player.y + playerSize < height) || (player.y - playerSize > b + (gapSize/2) && player.y - playerSize < height)){
-                    std::cout << "Hit down";
-                }
-            }
+        if(!obstacles[i].isActive) continue;
+        x = obstacles[i].object.x;
+        y = obstacles[i].object.y;
+        if(!(player.x + playerSize > x  && player.x + playerSize < x + obstcleWidth) || !(player.x - playerSize > x && player.x - playerSize < x + obstcleWidth)) continue;
+        if((player.y + playerSize > 0 && player.y + playerSize < y - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < y - (gapSize/2))){
+            std::cout << "Hit";
+        }
+        if((player.y + playerSize > y + (gapSize/2) && player.y + playerSize < screenHeight) || (player.y - playerSize > y + (gapSize/2) && player.y - playerSize < screenHeight)){
+            std::cout << "Hit";
         }
     }
 }
 
-float spawnTime;
 void Game::Update(){
     float delta = GetFrameTime();
     PlayerUpdate(delta);
-
+    ObstaclesUpdate(delta);
     CheckCollision();
-
-    for (int i = 0; i < 10; i++){
-        if(obstacles[i].isActive){
-            obstacles[i].x -= obstacleSpeed * delta;
-
-            if(obstacles[i].isScorable){
-                if(player.x + (playerSize/2) > obstacles[i].x + (obstcleWidth/2)){
-                    score++;
-                    obstacles[i].isScorable = false;
-                }
-            }
-
-            if ((obstacles[i].x + obstcleWidth) <= 0) obstacles[i].isActive = false;
-        }
-    }
-
-    spawnTime += delta;
-    if(spawnTime >= delayObstcle){
-        spawnTime = 0;
-        for (int i = 0; i < 10; i++){
-            if(obstacles[i].isActive == false){
-                obstacles[i].x = width;
-                obstacles[i].isActive = true;
-                obstacles[i].isScorable = true;
-                return;
-            }
-        }
-    }
 }
