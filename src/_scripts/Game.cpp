@@ -28,6 +28,10 @@ int obstacleSpeed = 100;
 int playerSize = 25;
 const int fontSize = 45;
 
+const int maxFallSpeed = 200;
+const int fallSpeed = 325;
+const int upSpeed = 150;
+
 // cant change
 int score = 0;
 int highestScore = 0;
@@ -61,11 +65,15 @@ void SetGame(int _width, int _height, std::string title){
 
 void SetAudio(){
     music = LoadMusicStream("../resources/music.wav");
-    SetMusicVolume(music, musicVolume);
     PlayMusicStream(music);
     getScoreSound = LoadSound("../resources/score.wav");
     hitSound = LoadSound("../resources/hit.mp3");
     upSound = LoadSound("../resources/up.wav");
+    
+    SetMusicVolume(music, 0);
+    SetSoundVolume(hitSound, 0);
+    SetSoundVolume(upSound, 0);
+    SetSoundVolume(getScoreSound, 0);
 }
 
 void SetPlayer(int x){
@@ -83,7 +91,6 @@ void SetText(){
 void SetObstacles(){
     for (int i = 0; i < 10; i++){
         obstacles[i].object.x = screenWidth;
-        obstacles[i].object.y = GetRandomValue(0, screenHeight);
         obstacles[i].isActive = false;
         obstacles[i].isScorable = true;
         obstacles[i].object.velocity = -obstacleSpeed;
@@ -222,6 +229,7 @@ void Game::Draw(){
             SetMusicVolume(music, musicVolume);
             SetSoundVolume(hitSound, sfxVolume);
             SetSoundVolume(upSound, sfxVolume);
+            SetSoundVolume(getScoreSound, sfxVolume);
             break;
         }
     }
@@ -234,20 +242,23 @@ int Clamp(int num, int min, int max){
 }
 
 void PlayerUpdate(float delta){
-    player.velocity += 300 * delta;                                            
     if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
-        player.velocity -= 200; 
         PlaySoundMulti(upSound);
+        player.velocity = -upSpeed;
+    }else{
+        player.velocity += fallSpeed * delta;
     }
-    player.velocity = Clamp(player.velocity, -100, 100); 
-    if(player.velocity == 0) player.velocity = 100;
-    player.y += delta * player.velocity;                                       
-    player.y = Clamp(player.y, playerSize, screenHeight - playerSize); 
-}
+    player.y += player.velocity * delta;
+    player.velocity = Clamp(player.velocity, -upSpeed ,maxFallSpeed );
+    player.y = Clamp(player.y, playerSize, screenHeight - playerSize);
+}       
 
 void SpawnObstacle(){
     for (int i = 0; i < 10; i++){
         if(obstacles[i].isActive) continue;
+        float rnd = GetRandomValue(0,9999);
+        rnd /= 10000;
+        obstacles[i].object.y = GetRandomValue(0, screenHeight) + rnd;
         obstacles[i].object.x = screenWidth;
         obstacles[i].isActive = true;
         obstacles[i].isScorable = true;
@@ -286,13 +297,19 @@ void CheckCollision(){
         if(!obstacles[i].isActive) continue;
         x = obstacles[i].object.x;
         y = obstacles[i].object.y;
-        if(!(player.x + playerSize > x  && player.x + playerSize < x + obstcleWidth) || !(player.x - playerSize > x && player.x - playerSize < x + obstcleWidth)) continue;
-        if((player.y + playerSize > 0 && player.y + playerSize < y - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < y - (gapSize/2))){
-            Hit();
+
+        bool playerRightCollide = (player.x + playerSize > x  && player.x + playerSize < x + obstcleWidth);
+        bool playerLeftCollide = (player.x - playerSize > x && player.x - playerSize < x + obstcleWidth);
+
+        if(playerRightCollide || playerLeftCollide){
+            if((player.y + playerSize > 0 && player.y + playerSize < y - (gapSize/2)) || (player.y - playerSize > 0 && player.y - playerSize < y - (gapSize/2))){
+                Hit();
+            }
+            if((player.y + playerSize > y + (gapSize/2) && player.y + playerSize < screenHeight) || (player.y - playerSize > y + (gapSize/2) && player.y - playerSize < screenHeight)){
+                Hit();
+            }
         }
-        if((player.y + playerSize > y + (gapSize/2) && player.y + playerSize < screenHeight) || (player.y - playerSize > y + (gapSize/2) && player.y - playerSize < screenHeight)){
-            Hit();
-        }
+
     }
 }
 
